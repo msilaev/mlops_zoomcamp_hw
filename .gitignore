@@ -184,3 +184,7 @@ mlruns.db
 *.db
 *.parquet
 *.yaml
+
+02-experiment-tracking/scenario-1.ipynb
+02-experiment-tracking/scenario-2.ipynb
+02-experiment-tracking/scenario-3.ipynb
