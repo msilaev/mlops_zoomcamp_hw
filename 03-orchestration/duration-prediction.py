@@ -1,39 +1,16 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[10]:
-
-
-get_ipython().system('python -V')
-
-
-# In[11]:
-
-
 import pandas as pd
-
-
-# In[12]:
-
 
 import pickle
 
-
-# In[13]:
-
-
 import xgboost as xgb
-
-
-# In[14]:
 
 
 #import seaborn as sns
 #import matplotlib.pyplot as plt
 #import numpy as np
-
-
-# In[15]:
 
 
 from sklearn.feature_extraction import DictVectorizer
@@ -42,26 +19,18 @@ from sklearn.feature_extraction import DictVectorizer
 #from sklearn.linear_model import Ridge
 from sklearn.metrics import root_mean_squared_error
 
-
-# In[16]:
-
-
 import mlflow
 
+import argparse
 
-# In[17]:
-
+from pathlib import Path
+model_path = Path("models")
+model_path.mkdir(exist_ok=True)
 
 mlflow.set_tracking_uri("http://localhost:5000")
 
 
-# In[18]:
-
-
 mlflow.set_experiment("nyc-taxi-experiment")
-
-
-# In[19]:
 
 
 def read_dataframe(year, month):
@@ -82,26 +51,12 @@ def read_dataframe(year, month):
 
     return df
 
-
-# In[20]:
-
-
 #import xgboost as xgb
 #from hyperopt import fmin, tpe, hp, STATUS_OK, Trials
 #from hyperopt.pyll import scope
 
-
-# In[21]:
-
-
 #mlflow.set_tracking_uri("sqlite:///mlflow1.db")
 #mlflow.set_experiment("nyc-taxi-experiment_1")
-
-
-
-df_val = read_dataframe(year=2021, month=2)
-df_train = read_dataframe(year=2021, month=1)
-
 
 def create_X(df, dv=None):
     categorical = ["PU_DO"]
@@ -117,92 +72,72 @@ def create_X(df, dv=None):
 
     return X, dv
 
-X_train, dv = create_X(df_train)
-X_val, _ = create_X(df_val, dv=dv)
-
-
-target = 'duration'
-y_train = df_train[target].values
-y_val = df_val[target].values
 
 
 def train_model(X_train, y_train, X_val, y_val, dv):
-    train = xgb.DMatrix(X_train, label=y_train)
-    valid = xgb.DMatrix(X_val, label=y_val)
 
-    best_params = {
-        'max_depth': 30,
-        'learning_rate': 0.09585,
-        'reg_lambda': 0.011074980286498087,
-        'reg_alpha': 0.018788520719314586,
-        'min_child_weight': 1.06,
-        'objective': 'reg:linear',
-        'seed': 42
-    }
+    print
+    with mlflow.start_run():
 
-    model = xgb.train(
-        params=best_params,
-        dtrain=train,
-        num_boost_round=30,
-        evals=[(valid, 'valid')],
-        early_stopping_rounds=50       
-    )
+        train = xgb.DMatrix(X_train, label=y_train)
+        valid = xgb.DMatrix(X_val, label=y_val)
 
-    return model
+        best_params = {
+            'max_depth': 30,
+            'learning_rate': 0.09585,
+            'reg_lambda': 0.011074980286498087,
+            'reg_alpha': 0.018788520719314586,
+            'min_child_weight': 1.06,
+            'objective': 'reg:linear',
+            'seed': 42
+        }
 
+        mlflow.log_params(best_params)
+        model = xgb.train(
+            params=best_params,
+            dtrain=train,
+            num_boost_round=30,
+            evals=[(valid, 'valid')],
+            early_stopping_rounds=50       
+        )
 
-train = xgb.DMatrix(X_train, label=y_train)
-valid = xgb.DMatrix(X_val, label=y_val)
+        y_pred = model.predict(valid)
+        rmse = root_mean_squared_error(y_val, y_pred)
+        mlflow.log_metric("rmse", rmse)
 
+        with open("models/preprocessor.b", "wb") as f_out:
+            pickle.dump(dv, f_out)
 
-# In[33]:
+        mlflow.log_artifact("models/preprocessor.b", artifact_path="preprocessor")
+        mlflow.xgboost.log_model(model, artifact_path="models_mlflow")
 
+def run(year, month):
 
-from pathlib import Path
-model_path = Path("models")
-model_path.mkdir(exist_ok=True)
+    df_train = read_dataframe(year=year, month=month)
 
+    next_month = month + 1
+    if next_month > 12:
+        next_month = 1
+        year += 1
+    df_val = read_dataframe(year=year, month=next_month)
 
-# In[34]:
+    X_train, dv = create_X(df_train)
+    X_val, _ = create_X(df_val, dv=dv)
 
+    target = 'duration'
+    y_train = df_train[target].values
+    y_val = df_val[target].values
+    
+    print("Training data shape:", X_train.shape)
 
-with mlflow.start_run():
+    train_model(X_train, y_train, X_val, y_val, dv)
 
-    train = xgb.DMatrix(X_train, label=y_train)
-    valid = xgb.DMatrix(X_val, label=y_val)
+if __name__ == "__main__":
 
-    best_params = {
-        'max_depth': 30,
-        'learning_rate': 0.09585,
-        'reg_lambda': 0.011074980286498087,
-        'reg_alpha': 0.018788520719314586,
-        'min_child_weight': 1.06,
-        'objective': 'reg:linear',
-        'seed': 42
-    }
-
-    mlflow.log_params(best_params)
-    model = xgb.train(
-        params=best_params,
-        dtrain=train,
-        num_boost_round=30,
-        evals=[(valid, 'valid')],
-        early_stopping_rounds=50       
-    )
-
-    y_pred = model.predict(valid)
-    rmse = root_mean_squared_error(y_val, y_pred)
-    mlflow.log_metric("rmse", rmse)
-
-    with open("models/preprocessor.b", "wb") as f_out:
-        pickle.dump(dv, f_out)
-
-    mlflow.log_artifact("models/preprocessor.b", artifact_path="preprocessor")
-    mlflow.xgboost.log_model(model, artifact_path="models_mlflow")
-
-
-# In[ ]:
-
-
-
-
+    parser = argparse.ArgumentParser(description="Train a model to predict taxi trip duration")
+    parser.add_argument("--year", type=int, required = True,  help="Year of the data")
+    parser.add_argument("--month", type=int, required = True, help="Month of the data")
+    args = parser.parse_args()
+    
+    run(args.year, args.month)
+    
