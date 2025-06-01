@@ -51,12 +51,6 @@ def read_dataframe(year, month):
 
     return df
 
-#import xgboost as xgb
-#from hyperopt import fmin, tpe, hp, STATUS_OK, Trials
-#from hyperopt.pyll import scope
-
-#mlflow.set_tracking_uri("sqlite:///mlflow1.db")
-#mlflow.set_experiment("nyc-taxi-experiment_1")
 
 def create_X(df, dv=None):
     categorical = ["PU_DO"]
@@ -75,9 +69,8 @@ def create_X(df, dv=None):
 
 
 def train_model(X_train, y_train, X_val, y_val, dv):
-
-    print
-    with mlflow.start_run():
+    
+    with mlflow.start_run() as run:
 
         train = xgb.DMatrix(X_train, label=y_train)
         valid = xgb.DMatrix(X_val, label=y_val)
@@ -96,7 +89,7 @@ def train_model(X_train, y_train, X_val, y_val, dv):
         model = xgb.train(
             params=best_params,
             dtrain=train,
-            num_boost_round=30,
+            num_boost_round=2,
             evals=[(valid, 'valid')],
             early_stopping_rounds=50       
         )
@@ -110,6 +103,9 @@ def train_model(X_train, y_train, X_val, y_val, dv):
 
         mlflow.log_artifact("models/preprocessor.b", artifact_path="preprocessor")
         mlflow.xgboost.log_model(model, artifact_path="models_mlflow")
+
+        return run.info.run_id
+
 
 def run(year, month):
 
@@ -130,7 +126,9 @@ def run(year, month):
     
     print("Training data shape:", X_train.shape)
 
-    train_model(X_train, y_train, X_val, y_val, dv)
+    run_id = train_model(X_train, y_train, X_val, y_val, dv)
+
+    return run_id
 
 if __name__ == "__main__":
 
@@ -139,5 +137,7 @@ if __name__ == "__main__":
     parser.add_argument("--month", type=int, required = True, help="Month of the data")
     args = parser.parse_args()
     
-    run(args.year, args.month)
+    run_id = run(args.year, args.month)
+
+    print(f"Model trained and logged with run_id: {run_id}")
     
