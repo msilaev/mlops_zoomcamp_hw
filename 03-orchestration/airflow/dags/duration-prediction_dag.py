@@ -5,7 +5,7 @@ import pandas as pd
 import pickle
 import xgboost as xgb
 from sklearn.feature_extraction import DictVectorizer
-from sklearn.metrics import root_mean_squared_error
+from sklearn.metrics import mean_squared_error
 import mlflow
 from pathlib import Path
 
@@ -13,7 +13,9 @@ def train_pipeline(year, month, **context):
     model_path = Path("/opt/airflow/models")
     model_path.mkdir(exist_ok=True)
 
-    mlflow.set_tracking_uri("http://mlflow:5000")
+    #mlflow.set_tracking_uri("http://mlflow:5000")
+    mlflow.set_tracking_uri("file:///opt/airflow/mlruns")
+
     mlflow.set_experiment("nyc-taxi-experiment")
 
     def read_dataframe(year, month):
@@ -60,7 +62,7 @@ def train_pipeline(year, month, **context):
                 early_stopping_rounds=50
             )
             y_pred = model.predict(valid)
-            rmse = root_mean_squared_error(y_val, y_pred)
+            rmse = (mean_squared_error(y_val, y_pred))**(0.5)
             mlflow.log_metric("rmse", rmse)
             with open(model_path / "preprocessor.b", "wb") as f_out:
                 pickle.dump(dv, f_out)
