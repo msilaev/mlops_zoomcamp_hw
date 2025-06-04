@@ -40,14 +40,14 @@ x-airflow-common:
 
 services:
 
-mlflow:
-  image: ghcr.io/mlflow/mlflow:v2.12.2
-  command: mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root /mlruns --host 0.0.0.0 --port 5000
-  volumes:
-    - ./mlruns:/mlruns
-    - ./mlflow.db:/mlflow.db
-  ports:
-    - "5000:5000"
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.12.2
+    command: mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root /mlruns --host 0.0.0.0 --port 5000
+    volumes:
+      - ./mlruns:/mlruns
+      - ./mlflow.db:/mlflow.db
+    ports:
+      - "5000:5000"
 
   postgres:
     image: postgres:13
@@ -64,30 +64,33 @@ mlflow:
       start_period: 5s
     restart: always
 
-  #redis:
-  #  image: redis:7.2-bookworm
-  #  expose:
-  #    - 6379
-  #  healthcheck:
-  #    test: ["CMD", "redis-cli", "ping"]
-  #    interval: 10s
-  #    timeout: 30s
-  #    retries: 50
-  #    start_period: 30s
-  #  restart: always
+  redis:
+    image: redis:7.2-bookworm
+    expose:
+      - 6379
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 30s
+      retries: 50
+      start_period: 30s
+    restart: always
 
   airflow-scheduler:
+    image: apache/airflow:2.8.3
     <<: *airflow-common
     command: scheduler
     restart: always
+    environment:
+      <<: *airflow-common-env
+      _PIP_ADDITIONAL_REQUIREMENTS: "mlflow xgboost scikit-learn pandas"
     depends_on:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
 
-
   airflow-webserver:
-    image: apache/airflow:2.8.3  # Use the official Airflow image or your base image
+    image: apache/airflow:2.8.3
     <<: *airflow-common
     command: webserver
     ports:
@@ -102,7 +105,6 @@ mlflow:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
-  
 
   airflow-init:
     <<: *airflow-common
