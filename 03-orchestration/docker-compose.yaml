@@ -23,6 +23,7 @@ x-airflow-common:
     - ${AIRFLOW_PROJ_DIR:-.}/airflow/plugins:/opt/airflow/plugins
     - ${AIRFLOW_PROJ_DIR:-.}/airflow/models:/opt/airflow/models   # <--- add this line
     - ./mlruns:/opt/airflow/mlruns
+    - ./mlruns:/mlruns
 
   #volumes:
   #  - ./airflow/dags:/opt/airflow/dags
@@ -39,19 +40,14 @@ x-airflow-common:
 
 services:
 
-  mlflow:
-    #image: mlflow:latest
-    image: ghcr.io/mlflow/mlflow:v2.12.2
-    command: mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root /mlruns --host 0.0.0.0 --port 5000
-    #volumes:
-    #  - ./mlruns:/mlruns
-    #  - ./mlflow.db:/mlflow.db
-    volumes:
-      - ./mlruns:/mlflow/mlruns
-      - ./mlflow.db:/mlflow/mlflow.db  # ensure this exists or can be created
-
-    ports:
-      - "5000:5000"
+mlflow:
+  image: ghcr.io/mlflow/mlflow:v2.12.2
+  command: mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root /mlruns --host 0.0.0.0 --port 5000
+  volumes:
+    - ./mlruns:/mlruns
+    - ./mlflow.db:/mlflow.db
+  ports:
+    - "5000:5000"
 
   postgres:
     image: postgres:13
@@ -68,20 +64,30 @@ services:
       start_period: 5s
     restart: always
 
-  redis:
-    image: redis:7.2-bookworm
-    expose:
-      - 6379
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 30s
-      retries: 50
-      start_period: 30s
+  #redis:
+  #  image: redis:7.2-bookworm
+  #  expose:
+  #    - 6379
+  #  healthcheck:
+  #    test: ["CMD", "redis-cli", "ping"]
+  #    interval: 10s
+  #    timeout: 30s
+  #    retries: 50
+  #    start_period: 30s
+  #  restart: always
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
     restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
 
 
   airflow-webserver:
+    image: apache/airflow:2.8.3  # Use the official Airflow image or your base image
     <<: *airflow-common
     command: webserver
     ports:
@@ -96,15 +102,7 @@ services:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
-
-  airflow-scheduler:
-    <<: *airflow-common
-    command: scheduler
-    restart: always
-    depends_on:
-      <<: *airflow-common-depends-on
-      airflow-init:
-        condition: service_completed_successfully
+  
 
   airflow-init:
     <<: *airflow-common
