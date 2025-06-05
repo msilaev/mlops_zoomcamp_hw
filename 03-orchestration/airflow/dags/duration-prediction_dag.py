@@ -9,29 +9,46 @@ from sklearn.metrics import mean_squared_error
 import mlflow
 from pathlib import Path
 
+TRACKING_SERVER_HOST = "mlflow"
+MLFLOW_TRACKING_URI = f"http://{TRACKING_SERVER_HOST}:5000"
+
 def train_pipeline(year, month, **context):
-    model_path = Path("/opt/airflow/models")
-    model_path.mkdir(exist_ok=True)
 
-    #mlflow.set_tracking_uri("http://mlflow:5000")
-    mlflow.set_tracking_uri("file:///opt/airflow/mlruns")
 
-    mlflow.set_experiment("nyc-taxi-experiment")
+    mlflow.set_tracking_uri("http://mlflow:5000")
 
+    model_local_save_path = Path("/opt/airflow/models")
+
+    model_local_save_path.mkdir(parents=True, exist_ok=True)
+
+    mlflow.set_experiment("nyc-taxi-experiment-1") 
+    
     def read_dataframe(year, month):
-        url = f'https://d37ci6vzurychx.cloudfront.net/trip-data/green_tripdata_{year}-{month:02}.parquet'
+        #url = f'https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_{year}-{month:02}.parquet'
+        url = f'https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_{year}-{month:02}.parquet'
+               #https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2023-03.parquet
         df = pd.read_parquet(url)
-        df['duration'] = df.lpep_dropoff_datetime - df.lpep_pickup_datetime
+
+        print(df.columns)
+
+        df["duration"] = df.tpep_dropoff_datetime - df.tpep_pickup_datetime
+        #df['duration'] = df.lpep_dropoff_datetime - df.lpep_pickup_datetime
         df.duration = df.duration.apply(lambda td: td.total_seconds() / 60)
         df = df[(df.duration >= 1) & (df.duration <= 60)]
         categorical = ['PULocationID', 'DOLocationID']
         df[categorical] = df[categorical].astype(str)
         df["PU_DO"] = df["PULocationID"] + "_" + df["DOLocationID"]
+
+        #df = df.dropna()
         return df
 
     def create_X(df, dv=None):
         categorical = ["PU_DO"]
         numerical = ["trip_distance"]
+
+        print(df.columns)
+        print(df[categorical + numerical].head())
+
         dicts = df[categorical + numerical].to_dict(orient='records')
         if dv is None:
             dv = DictVectorizer(sparse=True)
@@ -64,10 +81,22 @@ def train_pipeline(year, month, **context):
             y_pred = model.predict(valid)
             rmse = (mean_squared_error(y_val, y_pred))**(0.5)
             mlflow.log_metric("rmse", rmse)
-            with open(model_path / "preprocessor.b", "wb") as f_out:
+
+            preprocessor_filename = "preprocessor.b"
+            local_preprocessor_path = model_local_save_path / preprocessor_filename
+
+            with open(local_preprocessor_path, "wb") as f_out:
                 pickle.dump(dv, f_out)
-            mlflow.log_artifact(str(model_path / "preprocessor.b"), artifact_path="preprocessor")
-            mlflow.xgboost.log_model(model, artifact_path="models_mlflow")
+            
+                    # *** ADD THIS LINE TO YOUR DAG ***
+            print(f"MLflow Tracking URI: {mlflow.get_tracking_uri()}")
+            print(f"MLflow Artifact URI (before logging artifact): {mlflow.get_artifact_uri()}")
+                        
+            mlflow.log_artifact(str(local_preprocessor_path), artifact_path="preprocessor")
+            
+#            mlflow.log_artifact(str(model_path / "preprocessor.b"), artifact_path="preprocessor")
+            mlflow.xgboost.log_model(model, artifact_path="models_mlflow")   
+
             return run.info.run_id
 
     df_train = read_dataframe(year, month)
@@ -100,6 +129,6 @@ with DAG(
     train_task = PythonOperator(
         task_id="train_model",
         python_callable=train_pipeline,
-        op_kwargs={'year': 2023, 'month': 1},  # <-- set your default year/month here
+        op_kwargs={'year': 2023, 'month': 3},  # <-- set your default year/month here
     )
     
