@@ -2,119 +2,76 @@ from airflow import DAG
 from airflow.operators.python import PythonOperator
 from datetime import datetime
 import pandas as pd
-import pickle
-import xgboost as xgb
 from sklearn.feature_extraction import DictVectorizer
-from sklearn.metrics import mean_squared_error
+from sklearn.linear_model import LinearRegression
 import mlflow
-from pathlib import Path
+import mlflow.sklearn
 
-TRACKING_SERVER_HOST = "mlflow"
-MLFLOW_TRACKING_URI = f"http://{TRACKING_SERVER_HOST}:5000"
+import pandas as pd
+from sklearn.feature_extraction import DictVectorizer
+from sklearn.linear_model import SGDRegressor
 
-def train_pipeline(year, month, **context):
+def batch_train(df, categorical, batch_size=100_000):
+    dv = DictVectorizer()
+    model = SGDRegressor(max_iter=1000, tol=1e-3)
+    first = True
 
-
-    mlflow.set_tracking_uri("http://mlflow:5000")
-
-    model_local_save_path = Path("/opt/airflow/models")
-
-    model_local_save_path.mkdir(parents=True, exist_ok=True)
-
-    mlflow.set_experiment("nyc-taxi-experiment-1") 
-    
-    def read_dataframe(year, month):
-        #url = f'https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_{year}-{month:02}.parquet'
-        url = f'https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_{year}-{month:02}.parquet'
-               #https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2023-03.parquet
-        #df = pd.read_parquet(url)
-
-        df = pd.read_parquet(url, columns=[ "tpep_pickup_datetime", "tpep_dropoff_datetime", "PULocationID", "DOLocationID", "trip_distance"])
-        df = df.sample(frac=0.1, random_state=42)  # Use 10% of the data
-        #print(df.columns)
-
-        df["duration"] = df.tpep_dropoff_datetime - df.tpep_pickup_datetime
-        #df['duration'] = df.lpep_dropoff_datetime - df.lpep_pickup_datetime
-        df.duration = df.duration.apply(lambda td: td.total_seconds() / 60)
-        df = df[(df.duration >= 1) & (df.duration <= 60)]
-        categorical = ['PULocationID', 'DOLocationID']
-        df[categorical] = df[categorical].astype(str)
-        df["PU_DO"] = df["PULocationID"] + "_" + df["DOLocationID"]
-
-        #df = df.dropna()
-        return df
-
-    def create_X(df, dv=None):
-        categorical = ["PU_DO"]
-        numerical = ["trip_distance"]
-
-        print(df.columns)
-        print(df[categorical + numerical].head())
-
-        dicts = df[categorical + numerical].to_dict(orient='records')
-        if dv is None:
-            dv = DictVectorizer(sparse=True)
+    for start in range(0, len(df), batch_size):
+        end = min(start + batch_size, len(df))
+        batch = df.iloc[start:end]
+        dicts = batch[categorical].to_dict(orient='records')
+        if first:
             X = dv.fit_transform(dicts)
+            first = False
         else:
             X = dv.transform(dicts)
-        return X, dv
+        y = batch['duration'].values
+        model.partial_fit(X, y)
+    return model, dv
 
-    def train_model(X_train, y_train, X_val, y_val, dv):
-        with mlflow.start_run() as run:
-            train = xgb.DMatrix(X_train, label=y_train)
-            valid = xgb.DMatrix(X_val, label=y_val)
-            best_params = {
-                'max_depth': 30,
-                'learning_rate': 0.09585,
-                'reg_lambda': 0.011074980286498087,
-                'reg_alpha': 0.018788520719314586,
-                'min_child_weight': 1.06,
-                'objective': 'reg:linear',
-                'seed': 42
-            }
-            mlflow.log_params(best_params)
-            model = xgb.train(
-                params=best_params,
-                dtrain=train,
-                num_boost_round=2,
-                evals=[(valid, 'valid')],
-                early_stopping_rounds=50
-            )
-            y_pred = model.predict(valid)
-            rmse = (mean_squared_error(y_val, y_pred))**(0.5)
-            mlflow.log_metric("rmse", rmse)
+def train_pipeline(**context):
+    mlflow.set_tracking_uri("http://mlflow:5000")
+    mlflow.set_experiment("nyc-taxi-experiment-1")
 
-            preprocessor_filename = "preprocessor.b"
-            local_preprocessor_path = model_local_save_path / preprocessor_filename
+    # 1. Load data
+    url = "https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2023-03.parquet"
+    df = pd.read_parquet(url)
+    print(f"Loaded records: {len(df)}")  # Q3
 
-            with open(local_preprocessor_path, "wb") as f_out:
-                pickle.dump(dv, f_out)
-            
-                    # *** ADD THIS LINE TO YOUR DAG ***
-            print(f"MLflow Tracking URI: {mlflow.get_tracking_uri()}")
-            print(f"MLflow Artifact URI (before logging artifact): {mlflow.get_artifact_uri()}")
-                        
-            mlflow.log_artifact(str(local_preprocessor_path), artifact_path="preprocessor")
-            
-#            mlflow.log_artifact(str(model_path / "preprocessor.b"), artifact_path="preprocessor")
-            mlflow.xgboost.log_model(model, artifact_path="models_mlflow")   
+    # 2. Prepare data
+    df['duration'] = df.tpep_dropoff_datetime - df.tpep_pickup_datetime
+    df.duration = df.duration.dt.total_seconds() / 60
+    df = df[(df.duration >= 1) & (df.duration <= 60)]
+    categorical = ['PULocationID', 'DOLocationID']
+    df[categorical] = df[categorical].astype(str)
+    print(f"Records after preparation: {len(df)}")  # Q4
 
-            return run.info.run_id
+    # 3. Feature engineering
+    #dicts = df[categorical].to_dict(orient='records')
 
-    df_train = read_dataframe(year, month)
-    next_month = month + 1
-    next_year = year
-    if next_month > 12:
-        next_month = 1
-        next_year += 1
-    df_val = read_dataframe(next_year, next_month)
-    X_train, dv = create_X(df_train)
-    X_val, _ = create_X(df_val, dv=dv)
-    target = 'duration'
-    y_train = df_train[target].values
-    y_val = df_val[target].values
-    run_id = train_model(X_train, y_train, X_val, y_val, dv)
-    print(f"Model trained and logged with run_id: {run_id}")
+    batch_size = 100000
+    dicts_iter = (df.iloc[i:i+batch_size][categorical].to_dict(orient='records')
+              for i in range(0, len(df), batch_size))
+    dicts = []
+    for d in dicts_iter:
+        dicts.extend(d)
+
+    dv = DictVectorizer()
+    X_train = dv.fit_transform(dicts)
+    y_train = df['duration'].values
+
+    # 4. Train model
+    lr = LinearRegression()
+    lr.fit(X_train, y_train)
+    print(f"Model intercept: {lr.intercept_:.2f}")  # Q5
+
+    # 5. MLflow tracking
+    with mlflow.start_run():
+        mlflow.sklearn.log_model(lr, "model")
+        mlflow.log_param("vectorizer", "DictVectorizer")
+        mlflow.log_param("features", categorical)
+        mlflow.log_metric("intercept", lr.intercept_)
+        mlflow.sklearn.log_model(dv, "dict_vectorizer")
 
 default_args = {
     'owner': 'airflow',
@@ -131,6 +88,4 @@ with DAG(
     train_task = PythonOperator(
         task_id="train_model",
         python_callable=train_pipeline,
-        op_kwargs={'year': 2023, 'month': 3},  # <-- set your default year/month here
     )
-    
