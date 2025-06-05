@@ -27,9 +27,11 @@ def train_pipeline(year, month, **context):
         #url = f'https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_{year}-{month:02}.parquet'
         url = f'https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_{year}-{month:02}.parquet'
                #https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2023-03.parquet
-        df = pd.read_parquet(url)
+        #df = pd.read_parquet(url)
 
-        print(df.columns)
+        df = pd.read_parquet(url, columns=[ "tpep_pickup_datetime", "tpep_dropoff_datetime", "PULocationID", "DOLocationID", "trip_distance"])
+        df = df.sample(frac=0.1, random_state=42)  # Use 10% of the data
+        #print(df.columns)
 
         df["duration"] = df.tpep_dropoff_datetime - df.tpep_pickup_datetime
         #df['duration'] = df.lpep_dropoff_datetime - df.lpep_pickup_datetime
