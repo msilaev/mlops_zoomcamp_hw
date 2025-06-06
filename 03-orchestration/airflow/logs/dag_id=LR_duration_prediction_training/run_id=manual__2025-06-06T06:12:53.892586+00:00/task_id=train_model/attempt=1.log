@@ -1,0 +1,90 @@
+[2025-06-06T06:12:54.804+0000] {taskinstance.py:1979} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: LR_duration_prediction_training.train_model manual__2025-06-06T06:12:53.892586+00:00 [queued]>
+[2025-06-06T06:12:54.812+0000] {taskinstance.py:1979} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: LR_duration_prediction_training.train_model manual__2025-06-06T06:12:53.892586+00:00 [queued]>
+[2025-06-06T06:12:54.813+0000] {taskinstance.py:2193} INFO - Starting attempt 1 of 1
+[2025-06-06T06:12:54.825+0000] {taskinstance.py:2217} INFO - Executing <Task(PythonOperator): train_model> on 2025-06-06 06:12:53.892586+00:00
+[2025-06-06T06:12:54.834+0000] {standard_task_runner.py:60} INFO - Started process 1184 to run task
+[2025-06-06T06:12:54.836+0000] {standard_task_runner.py:87} INFO - Running: ['***', 'tasks', 'run', 'LR_duration_prediction_training', 'train_model', 'manual__2025-06-06T06:12:53.892586+00:00', '--job-id', '14', '--raw', '--subdir', 'DAGS_FOLDER/LR_duration-prediction_dag.py', '--cfg-path', '/tmp/tmp4nym74n_']
+[2025-06-06T06:12:54.838+0000] {standard_task_runner.py:88} INFO - Job 14: Subtask train_model
+[2025-06-06T06:12:54.850+0000] {logging_mixin.py:188} WARNING - /home/***/.local/lib/python3.8/site-packages/***/settings.py:194 DeprecationWarning: The sql_alchemy_conn option in [core] has been moved to the sql_alchemy_conn option in [database] - the old setting has been used, but please update your config.
+[2025-06-06T06:12:54.873+0000] {task_command.py:423} INFO - Running <TaskInstance: LR_duration_prediction_training.train_model manual__2025-06-06T06:12:53.892586+00:00 [running]> on host d1e68875bc3a
+[2025-06-06T06:12:54.940+0000] {taskinstance.py:2513} INFO - Exporting env vars: AIRFLOW_CTX_DAG_OWNER='***' AIRFLOW_CTX_DAG_ID='LR_duration_prediction_training' AIRFLOW_CTX_TASK_ID='train_model' AIRFLOW_CTX_EXECUTION_DATE='2025-06-06T06:12:53.892586+00:00' AIRFLOW_CTX_TRY_NUMBER='1' AIRFLOW_CTX_DAG_RUN_ID='manual__2025-06-06T06:12:53.892586+00:00'
+[2025-06-06T06:12:54.957+0000] {logging_mixin.py:188} WARNING - 2025/06/06 06:12:54 INFO mlflow.tracking.fluent: Experiment with name 'nyc-taxi-experiment-LR-1' does not exist. Creating a new experiment.
+[2025-06-06T06:12:59.204+0000] {taskinstance.py:2731} ERROR - Task failed with exception
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.8/site-packages/airflow/models/taskinstance.py", line 444, in _execute_task
+    result = _execute_callable(context=context, **execute_callable_kwargs)
+  File "/home/airflow/.local/lib/python3.8/site-packages/airflow/models/taskinstance.py", line 414, in _execute_callable
+    return execute_callable(context=context, **execute_callable_kwargs)
+  File "/home/airflow/.local/lib/python3.8/site-packages/airflow/operators/python.py", line 200, in execute
+    return_value = self.execute_callable()
+  File "/home/airflow/.local/lib/python3.8/site-packages/airflow/operators/python.py", line 217, in execute_callable
+    return self.python_callable(*self.op_args, **self.op_kwargs)
+  File "/opt/airflow/dags/LR_duration-prediction_dag.py", line 103, in train_pipeline
+    df_train = read_dataframe(year, month)
+  File "/opt/airflow/dags/LR_duration-prediction_dag.py", line 38, in read_dataframe
+    df = pd.read_parquet(url, columns=[ "tpep_pickup_datetime", "tpep_dropoff_datetime", "PULocationID", "DOLocationID", "trip_distance"])
+  File "/home/airflow/.local/lib/python3.8/site-packages/pandas/io/parquet.py", line 509, in read_parquet
+    return impl.read(
+  File "/home/airflow/.local/lib/python3.8/site-packages/pandas/io/parquet.py", line 227, in read
+    pa_table = self.api.parquet.read_table(
+  File "/home/airflow/.local/lib/python3.8/site-packages/pyarrow/parquet/core.py", line 3003, in read_table
+    return dataset.read(columns=columns, use_threads=use_threads,
+  File "/home/airflow/.local/lib/python3.8/site-packages/pyarrow/parquet/core.py", line 2631, in read
+    table = self._dataset.to_table(
+  File "pyarrow/_dataset.pyx", line 547, in pyarrow._dataset.Dataset.to_table
+  File "pyarrow/_dataset.pyx", line 393, in pyarrow._dataset.Dataset.scanner
+  File "pyarrow/_dataset.pyx", line 3466, in pyarrow._dataset.Scanner.from_dataset
+  File "pyarrow/_dataset.pyx", line 3384, in pyarrow._dataset.Scanner._make_scan_options
+  File "pyarrow/_dataset.pyx", line 3335, in pyarrow._dataset._populate_builder
+  File "pyarrow/error.pxi", line 91, in pyarrow.lib.check_status
+pyarrow.lib.ArrowInvalid: No match for FieldRef.Name(tpep_pickup_datetime) in VendorID: int32
+lpep_pickup_datetime: timestamp[us]
+lpep_dropoff_datetime: timestamp[us]
+store_and_fwd_flag: large_string
+RatecodeID: int64
+PULocationID: int32
+DOLocationID: int32
+passenger_count: int64
+trip_distance: double
+fare_amount: double
+extra: double
+mta_tax: double
+tip_amount: double
+tolls_amount: double
+ehail_fee: double
+improvement_surcharge: double
+total_amount: double
+payment_type: int64
+trip_type: int64
+congestion_surcharge: double
+__fragment_index: int32
+__batch_index: int32
+__last_in_fragment: bool
+__filename: string
+[2025-06-06T06:12:59.214+0000] {taskinstance.py:1149} INFO - Marking task as FAILED. dag_id=LR_duration_prediction_training, task_id=train_model, execution_date=20250606T061253, start_date=20250606T061254, end_date=20250606T061259
+[2025-06-06T06:12:59.230+0000] {standard_task_runner.py:107} ERROR - Failed to execute job 14 for task train_model (No match for FieldRef.Name(tpep_pickup_datetime) in VendorID: int32
+lpep_pickup_datetime: timestamp[us]
+lpep_dropoff_datetime: timestamp[us]
+store_and_fwd_flag: large_string
+RatecodeID: int64
+PULocationID: int32
+DOLocationID: int32
+passenger_count: int64
+trip_distance: double
+fare_amount: double
+extra: double
+mta_tax: double
+tip_amount: double
+tolls_amount: double
+ehail_fee: double
+improvement_surcharge: double
+total_amount: double
+payment_type: int64
+trip_type: int64
+congestion_surcharge: double
+__fragment_index: int32
+__batch_index: int32
+__last_in_fragment: bool
+__filename: string; 1184)
+[2025-06-06T06:12:59.276+0000] {local_task_job_runner.py:234} INFO - Task exited with return code 1
+[2025-06-06T06:12:59.301+0000] {taskinstance.py:3312} INFO - 0 downstream tasks scheduled from follow-on schedule check

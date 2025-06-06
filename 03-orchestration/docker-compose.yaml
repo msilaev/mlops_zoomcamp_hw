@@ -4,6 +4,7 @@ x-airflow-common:
 
   environment:
     &airflow-common-env
+    MLFLOW_TRACKING_URI: http://mlflow:5000 #
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
     AIRFLOW__CORE__FERNET_KEY: ''
@@ -18,6 +19,7 @@ x-airflow-common:
     - ${AIRFLOW_PROJ_DIR:-.}/airflow/config:/opt/airflow/config
     - ${AIRFLOW_PROJ_DIR:-.}/airflow/plugins:/opt/airflow/plugins
     - ${AIRFLOW_PROJ_DIR:-.}/airflow/models:/opt/airflow/models
+    - ./mlruns:/opt/airflow/mlruns # <--- ADD THIS LINE
     # Ensure ./mlruns exists and is writable: mkdir -p ./mlruns && chmod 777 ./mlruns
     #- ${AIRFLOW_PROJ_DIR:-.}/mlruns:/opt/airflow/mlruns
     #- ./mlruns:/opt/airflow/mlruns
@@ -95,6 +97,7 @@ services:
     command: webserver
     ports:
       - 8080:8080
+    environment: *airflow-common-env
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
       interval: 10s
