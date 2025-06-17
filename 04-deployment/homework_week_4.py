@@ -29,10 +29,14 @@ if __name__ == "__main__":
     numerical = ['trip_distance']
 
     # Load DictVectorizer and model from files already in the image
-    with open('model2.bin', 'rb') as f_in:
-        dv = pickle.load(f_in)
+
     with open('model.bin', 'rb') as f_in:
-        model = pickle.load(f_in)
+        dv, model = pickle.load(f_in)
+
+        #print(len(model))
+    
+    #with open('models/dv.bin', 'rb') as f_in:
+    #    dv = pickle.load(f_in)
 
     val_dicts = df_val[categorical + numerical].to_dict(orient='records')
     X_val = dv.transform(val_dicts)
